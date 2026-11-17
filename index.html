@@ -349,6 +349,57 @@ function pickBestCote(rows, from, to) {
   return best;
 }
 
+const CONFIDENCE_LABEL = { solide: 'solide', indicative: 'indicative', faible: 'faible' };
+
+/** Affiche une cote et propose de remplir le champ. */
+function renderCote(value, sampleSize, confidence) {
+  coteHint.innerHTML =
+    `Marché : <strong>${euro(value)}</strong> sur ${sampleSize} annonce(s) ` +
+    `(confiance ${CONFIDENCE_LABEL[confidence] ?? confidence}). ` +
+    '<a href="#" id="use-cote">Utiliser</a>';
+
+  const useLink = $('use-cote');
+  if (!useLink) return;
+
+  useLink.addEventListener('click', (event) => {
+    event.preventDefault();
+    $('referencePrice').value = String(value);
+    coteHint.innerHTML = `Cote remplie : <strong>${euro(value)}</strong>.`;
+  });
+}
+
+/**
+ * Aucune cote connue : proposer le calcul à la demande.
+ * La page ne peut pas interroger AutoScout24 elle-même (CORS) — c'est la
+ * fonction Edge `valuate` qui va chercher les annonces et cote en direct.
+ */
+function offerCalculation(brand, model, from, to) {
+  coteHint.innerHTML =
+    'Aucune cote connue pour ce modèle. <a href="#" id="calc-cote">Calculer maintenant</a> (≈ 10 s)';
+
+  const link = $('calc-cote');
+  if (!link) return;
+
+  link.addEventListener('click', async (event) => {
+    event.preventDefault();
+    coteHint.textContent = 'Interrogation du marché…';
+
+    const maxKm = Number($('maxMileage').value) || undefined;
+    const { data, error } = await supabase.functions.invoke('valuate', {
+      body: { brand, model, market: 'BE', yearFrom: from, yearTo: to, maxKm },
+    });
+
+    if (error || !data || data.value == null) {
+      coteHint.textContent = error
+        ? `Calcul impossible (${error.message ?? 'fonction indisponible'}).`
+        : (data?.message ?? 'Pas assez d’annonces comparables pour coter ce modèle.');
+      return;
+    }
+
+    renderCote(data.value, data.sampleSize ?? data.sample_size, data.confidence);
+  });
+}
+
 async function lookupCote() {
   const brand = $('brand').value.trim().replace(/[%_]/g, '');
   const model = $('model').value.trim().replace(/[%_]/g, '');
@@ -365,30 +416,14 @@ async function lookupCote() {
     .ilike('model', model)
     .order('computed_at', { ascending: false });
 
-  if (error || !data?.length) {
-    coteHint.textContent = 'Pas encore de cote pour ce modèle : le scan la calculera au prochain passage.';
-    return;
-  }
+  const best = error ? null : pickBestCote(data ?? [], from, to);
 
-  const best = pickBestCote(data, from, to);
   if (!best) {
-    coteHint.textContent = 'Aucune année ne recoupe une cote connue : le scan calculera celle de cette période.';
+    offerCalculation(brand, model, from, to);
     return;
   }
 
-  const labels = { solide: 'solide', indicative: 'indicative', faible: 'faible' };
-  coteHint.innerHTML =
-    `Marché : <strong>${euro(best.value)}</strong> sur ${best.sample_size} annonces ` +
-    `(confiance ${labels[best.confidence] ?? best.confidence}). <a href="#" id="use-cote">Utiliser</a>`;
-
-  const useLink = $('use-cote');
-  if (useLink) {
-    useLink.addEventListener('click', (event) => {
-      event.preventDefault();
-      $('referencePrice').value = String(best.value);
-      coteHint.innerHTML = `Cote remplie : <strong>${euro(best.value)}</strong>.`;
-    });
-  }
+  renderCote(best.value, best.sample_size, best.confidence);
 }
 
 function scheduleCoteLookup() {
