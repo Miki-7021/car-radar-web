@@ -349,6 +349,9 @@ function pickBestCote(rows, from, to) {
   return best;
 }
 
+// Nom réel de la fonction Edge déployée (Supabase génère parfois un nom).
+const VALUATE_FUNCTION = 'clever-endpoint';
+
 const CONFIDENCE_LABEL = { solide: 'solide', indicative: 'indicative', faible: 'faible' };
 
 /** Affiche une cote et propose de remplir le champ. */
@@ -385,7 +388,7 @@ function offerCalculation(brand, model, from, to) {
     coteHint.textContent = 'Interrogation du marché…';
 
     const maxKm = Number($('maxMileage').value) || undefined;
-    const { data, error } = await supabase.functions.invoke('valuate', {
+    const { data, error } = await supabase.functions.invoke(VALUATE_FUNCTION, {
       body: { brand, model, market: 'BE', yearFrom: from, yearTo: to, maxKm },
     });
 
