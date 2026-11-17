@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Car Radar — mes voitures suivies</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --ink: #16181d;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --accent: #111827;
+    --ok: #047857;
+    --warn: #b45309;
+    --err: #b91c1c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 18px 60px;
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); margin: 0 0 26px; font-size: 0.95rem; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 20px; margin-bottom: 18px;
+  }
+  h2 { font-size: 1.05rem; margin: 0 0 14px; }
+  label { display: block; font-size: 0.85rem; color: var(--muted); margin: 12px 0 4px; }
+  input {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px;
+    font-size: 1rem; background: #fff; color: var(--ink);
+  }
+  input:focus { outline: 2px solid #c7d2fe; border-color: #a5b4fc; }
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+  button {
+    margin-top: 16px; padding: 11px 16px; border: 0; border-radius: 9px;
+    background: var(--accent); color: #fff; font-size: 0.95rem; font-weight: 600;
+    cursor: pointer;
+  }
+  button.ghost { background: #fff; color: var(--ink); border: 1px solid var(--line); font-weight: 500; }
+  button:disabled { opacity: 0.55; cursor: default; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li {
+    display: flex; justify-content: space-between; gap: 12px; align-items: flex-start;
+    padding: 12px 0; border-top: 1px solid var(--line);
+  }
+  li:first-child { border-top: 0; }
+  li strong { display: block; }
+  li small { color: var(--muted); }
+  .del {
+    background: none; border: 0; color: var(--err); cursor: pointer;
+    font-size: 0.85rem; padding: 4px; margin: 0; white-space: nowrap;
+  }
+  .msg { margin-top: 12px; font-size: 0.9rem; }
+  .msg.ok { color: var(--ok); }
+  .msg.err { color: var(--err); }
+  .msg.warn { color: var(--warn); }
+  .empty { color: var(--muted); font-size: 0.95rem; }
+  a { color: #1d4ed8; }
+  .hidden { display: none; }
+  .who { color: var(--muted); font-size: 0.9rem; }
+  code { background: #f3f4f6; padding: 2px 6px; border-radius: 6px; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Car Radar</h1>
+  <p class="sub">Choisissez les voitures à surveiller. Vous recevrez une alerte dès qu'une pépite apparaît ou qu'un prix baisse.</p>
+
+  <!-- Connexion -->
+  <section class="card" id="login-card">
+    <h2>Se connecter</h2>
+    <p class="sub" style="margin-bottom:0">Pas de mot de passe : un lien vous est envoyé par e-mail.</p>
+    <label for="email">Votre e-mail</label>
+    <input id="email" type="email" autocomplete="email" placeholder="prenom@exemple.com">
+    <button id="login-btn">Recevoir le lien</button>
+    <div class="msg" id="login-msg"></div>
+  </section>
+
+  <!-- Sélections -->
+  <section class="card hidden" id="app-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+      <h2 style="margin:0">Mes voitures suivies</h2>
+      <button class="ghost" id="logout-btn" style="margin:0;padding:6px 10px;font-size:.85rem">Déconnexion</button>
+    </div>
+    <p class="who" id="who"></p>
+    <ul id="selections"></ul>
+    <p class="empty hidden" id="empty">Aucune voiture pour l'instant.</p>
+
+    <h2 style="margin-top:24px">Ajouter une voiture</h2>
+    <div class="row">
+      <div>
+        <label for="brand">Marque</label>
+        <input id="brand" placeholder="Toyota">
+      </div>
+      <div>
+        <label for="model">Modèle</label>
+        <input id="model" placeholder="Yaris">
+      </div>
+    </div>
+    <label for="keywords">Motorisation (séparée par des virgules)</label>
+    <input id="keywords" placeholder="1.3, 1.33">
+    <div class="row">
+      <div>
+        <label for="minYear">Année minimum</label>
+        <input id="minYear" type="number" value="2008" min="1990" max="2030">
+      </div>
+      <div>
+        <label for="maxYear">Année maximum</label>
+        <input id="maxYear" type="number" value="2017" min="1990" max="2030">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="maxPrice">Budget maximum (€)</label>
+        <input id="maxPrice" type="number" value="6500" min="500" step="100">
+      </div>
+      <div>
+        <label for="referencePrice">Cote marché (€)</label>
+        <input id="referencePrice" type="number" value="8000" min="500" step="100">
+      </div>
+    </div>
+    <label for="maxMileage">Kilométrage maximum</label>
+    <input id="maxMileage" type="number" value="220000" min="1000" step="1000">
+    <button id="add-btn">Ajouter à ma surveillance</button>
+    <div class="msg" id="app-msg"></div>
+  </section>
+
+  <!-- Telegram -->
+  <section class="card hidden" id="tg-card">
+    <h2>Alerter sur Telegram</h2>
+    <p class="sub" id="tg-state" style="margin-bottom:0"></p>
+    <a id="tg-link" class="hidden"><button>Lier mon Telegram</button></a>
+    <div class="msg" id="tg-msg"></div>
+  </section>
+</main>
+
+<script src="./config.js"></script>
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+const { supabaseUrl, supabaseKey, botUsername } = window.CAR_RADAR_CONFIG;
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+const $ = (id) => document.getElementById(id);
+const show = (el, on = true) => el.classList.toggle('hidden', !on);
+const setMsg = (el, text, kind = '') => {
+  el.textContent = text ?? '';
+  el.className = `msg ${kind}`.trim();
+};
+
+let session = null;
+
+// ─── Connexion par lien magique ─────────────────────────────────────────────
+$('login-btn').addEventListener('click', async () => {
+  const email = $('email').value.trim();
+  if (!email.includes('@')) return setMsg($('login-msg'), 'Adresse e-mail invalide.', 'err');
+
+  setMsg($('login-msg'), 'Envoi en cours…');
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: window.location.origin + window.location.pathname },
+  });
+
+  if (error) return setMsg($('login-msg'), error.message, 'err');
+  setMsg($('login-msg'), 'Lien envoyé. Ouvrez-le depuis cette adresse.', 'ok');
+});
+
+$('logout-btn').addEventListener('click', async () => {
+  await supabase.auth.signOut();
+  location.reload();
+});
+
+// ─── Chargement des données ─────────────────────────────────────────────────
+async function loadProfile() {
+  const { data, error } = await supabase
+    .from('users')
+    .select('email, telegram_chat_id')
+    .eq('id', session.user.id)
+    .maybeSingle();
+
+  if (error) return { error };
+  return { profile: data };
+}
+
+async function loadSelections() {
+  const { data, error } = await supabase
+    .from('selections')
+    .select('id, brand, model, engine_keywords, min_year, max_year, max_price, max_mileage_km, active')
+    .order('created_at', { ascending: false });
+  return { selections: data ?? [], error };
+}
+
+function renderSelections(list) {
+  const ul = $('selections');
+  ul.innerHTML = '';
+  show($('empty'), list.length === 0);
+
+  for (const item of list) {
+    const li = document.createElement('li');
+    const info = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = `${item.brand} ${item.model}`;
+    const detail = document.createElement('small');
+    detail.textContent =
+      `${item.min_year}-${item.max_year} · ${(item.engine_keywords ?? []).join(', ') || 'toutes motorisations'} · ` +
+      `max ${new Intl.NumberFormat('fr-BE').format(item.max_price)} € · ${new Intl.NumberFormat('fr-BE').format(item.max_mileage_km)} km`;
+    info.append(title, detail);
+
+    const del = document.createElement('button');
+    del.className = 'del';
+    del.textContent = 'Supprimer';
+    del.addEventListener('click', async () => {
+      del.disabled = true;
+      const { error } = await supabase.from('selections').delete().eq('id', item.id);
+      if (error) {
+        del.disabled = false;
+        return setMsg($('app-msg'), error.message, 'err');
+      }
+      await refresh();
+    });
+
+    li.append(info, del);
+    ul.append(li);
+  }
+}
+
+async function refresh() {
+  const [{ profile, error: profileError }, { selections, error: selectionsError }] = await Promise.all([
+    loadProfile(),
+    loadSelections(),
+  ]);
+
+  if (profileError) setMsg($('app-msg'), profileError.message, 'err');
+  if (selectionsError) setMsg($('app-msg'), selectionsError.message, 'err');
+
+  $('who').textContent = session.user.email ?? '';
+  renderSelections(selections ?? []);
+  renderTelegram(profile ?? null);
+}
+
+function renderTelegram(profile) {
+  const card = $('tg-card');
+  const state = $('tg-state');
+  const link = $('tg-link');
+
+  if (!profile) {
+    show(card, false);
+    return;
+  }
+  show(card, true);
+
+  if (profile.telegram_chat_id) {
+    state.textContent = 'Votre compte Telegram est lié : les alertes arrivent dans votre conversation avec le bot.';
+    show(link, false);
+    return;
+  }
+
+  state.innerHTML =
+    'Ouvrez la conversation avec le bot et appuyez sur <strong>Démarrer</strong> : ' +
+    'votre compte sera relié automatiquement au prochain scan (moins de deux heures).';
+  link.href = `https://t.me/${botUsername}?start=${session.user.id}`;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  show(link, true);
+}
+
+// ─── Ajout d'une sélection ──────────────────────────────────────────────────
+$('add-btn').addEventListener('click', async () => {
+  const brand = $('brand').value.trim();
+  const model = $('model').value.trim();
+  const minYear = Number($('minYear').value);
+  const maxYear = Number($('maxYear').value);
+  const maxPrice = Number($('maxPrice').value);
+  const referencePrice = Number($('referencePrice').value);
+
+  if (!brand || !model) return setMsg($('app-msg'), 'Marque et modèle sont obligatoires.', 'err');
+  if (minYear > maxYear) return setMsg($('app-msg'), 'L’année minimum dépasse l’année maximum.', 'err');
+  if (!(maxPrice > 0)) return setMsg($('app-msg'), 'Budget invalide.', 'err');
+
+  const keywords = $('keywords').value
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  $('add-btn').disabled = true;
+  setMsg($('app-msg'), 'Enregistrement…');
+
+  const { error } = await supabase.from('selections').insert({
+    user_id: session.user.id,
+    brand,
+    model,
+    engine_keywords: keywords,
+    min_year: minYear,
+    max_year: maxYear,
+    max_price: maxPrice,
+    reference_price: referencePrice > 0 ? referencePrice : maxPrice,
+    max_mileage_km: Number($('maxMileage').value) || 220000,
+  });
+
+  $('add-btn').disabled = false;
+
+  if (error) return setMsg($('app-msg'), error.message, 'err');
+
+  $('brand').value = '';
+  $('model').value = '';
+  $('keywords').value = '';
+  setMsg($('app-msg'), 'Ajouté. Vous serez alerté dès qu’une annonce correspond.', 'ok');
+  await refresh();
+});
+
+// ─── Session ────────────────────────────────────────────────────────────────
+async function start() {
+  const { data } = await supabase.auth.getSession();
+  session = data.session;
+
+  show($('login-card'), !session);
+  show($('app-card'), Boolean(session));
+
+  if (session) await refresh();
+}
+
+supabase.auth.onAuthStateChange(async (_event, newSession) => {
+  session = newSession;
+  show($('login-card'), !newSession);
+  show($('app-card'), Boolean(newSession));
+  show($('tg-card'), Boolean(newSession));
+  if (newSession) await refresh();
+});
+
+start();
+</script>
+</body>
+</html>
