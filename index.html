@@ -62,6 +62,9 @@
   .msg.err { color: var(--err); }
   .msg.warn { color: var(--warn); }
   .empty { color: var(--muted); font-size: 0.95rem; }
+  .hint { font-size: 0.8rem; color: var(--muted); margin: 6px 0 0; min-height: 1.1em; }
+  .hint a { color: #1d4ed8; text-decoration: none; }
+  .hint a:hover { text-decoration: underline; }
   a { color: #1d4ed8; }
   .hidden { display: none; }
   .who { color: var(--muted); font-size: 0.9rem; }
@@ -124,6 +127,7 @@
       <div>
         <label for="referencePrice">Cote marché (€)</label>
         <input id="referencePrice" type="number" value="8000" min="500" step="100">
+        <p class="hint" id="cote-hint"></p>
       </div>
     </div>
     <label for="maxMileage">Kilométrage maximum</label>
@@ -314,6 +318,87 @@ $('add-btn').addEventListener('click', async () => {
   setMsg($('app-msg'), 'Ajouté. Vous serez alerté dès qu’une annonce correspond.', 'ok');
   await refresh();
 });
+
+// ─── Cote suggérée, calculée par le scan ────────────────────────────────────
+const coteHint = $('cote-hint');
+let coteTimer;
+
+const euro = (value) =>
+  new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
+    .format(value);
+
+/**
+ * Choisit la cote la plus pertinente parmi celles du modèle :
+ * correspondance exacte d'années d'abord, sinon meilleur recouvrement.
+ */
+function pickBestCote(rows, from, to) {
+  let best = null;
+  let bestScore = -1;
+
+  for (const row of rows) {
+    const overlap = Math.min(to, row.year_to) - Math.max(from, row.year_from);
+    if (overlap < 0) continue;
+    const exact = row.year_from === from && row.year_to === to;
+    const score = overlap + (exact ? 1000 : 0);
+    if (score > bestScore) {
+      bestScore = score;
+      best = row;
+    }
+  }
+
+  return best;
+}
+
+async function lookupCote() {
+  const brand = $('brand').value.trim().replace(/[%_]/g, '');
+  const model = $('model').value.trim().replace(/[%_]/g, '');
+  const from = Number($('minYear').value);
+  const to = Number($('maxYear').value);
+
+  coteHint.innerHTML = '';
+  if (!brand || !model || !Number.isFinite(from) || !Number.isFinite(to)) return;
+
+  const { data, error } = await supabase
+    .from('market_values')
+    .select('year_from, year_to, value, sample_size, confidence, computed_at')
+    .ilike('brand', brand)
+    .ilike('model', model)
+    .order('computed_at', { ascending: false });
+
+  if (error || !data?.length) {
+    coteHint.textContent = 'Pas encore de cote pour ce modèle : le scan la calculera au prochain passage.';
+    return;
+  }
+
+  const best = pickBestCote(data, from, to);
+  if (!best) {
+    coteHint.textContent = 'Aucune année ne recoupe une cote connue : le scan calculera celle de cette période.';
+    return;
+  }
+
+  const labels = { solide: 'solide', indicative: 'indicative', faible: 'faible' };
+  coteHint.innerHTML =
+    `Marché : <strong>${euro(best.value)}</strong> sur ${best.sample_size} annonces ` +
+    `(confiance ${labels[best.confidence] ?? best.confidence}). <a href="#" id="use-cote">Utiliser</a>`;
+
+  const useLink = $('use-cote');
+  if (useLink) {
+    useLink.addEventListener('click', (event) => {
+      event.preventDefault();
+      $('referencePrice').value = String(best.value);
+      coteHint.innerHTML = `Cote remplie : <strong>${euro(best.value)}</strong>.`;
+    });
+  }
+}
+
+function scheduleCoteLookup() {
+  clearTimeout(coteTimer);
+  coteTimer = setTimeout(lookupCote, 450);
+}
+
+for (const id of ['brand', 'model', 'minYear', 'maxYear']) {
+  $(id).addEventListener('input', scheduleCoteLookup);
+}
 
 // ─── Session ────────────────────────────────────────────────────────────────
 async function start() {
