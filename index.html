@@ -153,6 +153,15 @@
       La cote du marché et les annonces sont calculées pour ce pays uniquement :
       une voiture allemande n'a pas le prix d'une belge.
     </p>
+    <label for="platform">Site d'annonces</label>
+    <select id="platform">
+      <option value="all" selected>Tous les sites (recommandé)</option>
+      <option value="autoscout24">AutoScout24</option>
+    </select>
+    <p class="hint">
+      « Tous les sites » cherche sur chaque site de votre formule. Vous recevrez une
+      alerte par annonce, quel que soit le site qui la publie.
+    </p>
     <div class="row">
       <div>
         <label for="minYear">Année minimum</label>
@@ -390,6 +399,7 @@ $('add-btn').addEventListener('click', async () => {
     model,
     engine_keywords: keywords,
     market: $('market').value,
+    platform: $('platform').value,
     min_year: minYear,
     max_year: maxYear,
     max_price: maxPrice,
