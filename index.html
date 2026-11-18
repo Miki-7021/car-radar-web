@@ -65,6 +65,7 @@
   .hint { font-size: 0.8rem; color: var(--muted); margin: 6px 0 0; min-height: 1.1em; }
   .hint a { color: #1d4ed8; text-decoration: none; }
   .hint a:hover { text-decoration: underline; }
+  .sep { border-top: 1px solid #e5e7eb; margin: 20px 0 14px; }
   a { color: #1d4ed8; }
   .hidden { display: none; }
   .who { color: var(--muted); font-size: 0.9rem; }
@@ -84,6 +85,12 @@
     <input id="email" type="email" autocomplete="email" placeholder="prenom@exemple.com">
     <button id="login-btn">Recevoir le lien</button>
     <div class="msg" id="login-msg"></div>
+
+    <div class="sep"></div>
+    <p class="sub" style="margin-bottom:0">Vous avez déjà défini un mot de passe ? Accès immédiat, sans e-mail.</p>
+    <label for="login-password">Mot de passe</label>
+    <input id="login-password" type="password" autocomplete="current-password" placeholder="••••••••">
+    <button class="ghost" id="password-login-btn">Se connecter avec mon mot de passe</button>
   </section>
 
   <!-- Sélections -->
@@ -93,6 +100,28 @@
       <button class="ghost" id="logout-btn" style="margin:0;padding:6px 10px;font-size:.85rem">Déconnexion</button>
     </div>
     <p class="who" id="who"></p>
+
+    <details id="password-box" style="margin:0 0 8px">
+      <summary style="cursor:pointer;color:var(--muted);font-size:.85rem">
+        Connexion rapide — définir un mot de passe (facultatif)
+      </summary>
+      <p class="hint" style="margin:8px 0 6px">
+        Sans mot de passe, chaque reconnexion demande un nouvel e-mail. Avec, vous saisissez
+        votre adresse et votre mot de passe, et vous arrivez directement au formulaire.
+      </p>
+      <div class="row">
+        <div>
+          <label for="new-password">Mot de passe</label>
+          <input id="new-password" type="password" autocomplete="new-password" minlength="8" placeholder="8 caractères minimum">
+        </div>
+        <div>
+          <label for="confirm-password">Confirmation</label>
+          <input id="confirm-password" type="password" autocomplete="new-password">
+        </div>
+      </div>
+      <button class="ghost" id="set-password-btn">Enregistrer mon mot de passe</button>
+      <div class="msg" id="password-msg"></div>
+    </details>
     <ul id="selections"></ul>
     <p class="empty hidden" id="empty">Aucune voiture pour l'instant.</p>
 
@@ -173,6 +202,7 @@ $('login-btn').addEventListener('click', async () => {
   });
 
   if (error) return setMsg($('login-msg'), error.message, 'err');
+  localStorage.setItem('car-radar-email', email);
   setMsg($('login-msg'), 'Lien envoyé. Ouvrez-le depuis cette adresse.', 'ok');
 });
 
@@ -180,6 +210,49 @@ $('logout-btn').addEventListener('click', async () => {
   await supabase.auth.signOut();
   location.reload();
 });
+
+// ─── Connexion par mot de passe (facultative, mais immédiate) ───────────────
+$('password-login-btn').addEventListener('click', async () => {
+  const email = $('email').value.trim();
+  const password = $('login-password').value;
+
+  if (!email.includes('@')) return setMsg($('login-msg'), 'Adresse e-mail invalide.', 'err');
+  if (password.length === 0) return setMsg($('login-msg'), 'Saisissez votre mot de passe.', 'err');
+
+  setMsg($('login-msg'), 'Connexion…');
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+  if (error) {
+    const message = /invalid|credentials/i.test(error.message)
+      ? 'Adresse ou mot de passe incorrect. Le lien par e-mail reste utilisable.'
+      : error.message;
+    return setMsg($('login-msg'), message, 'err');
+  }
+
+  setMsg($('login-msg'), 'Connecté.', 'ok');
+});
+
+// ─── Définir un mot de passe depuis une session ouverte ─────────────────────
+$('set-password-btn').addEventListener('click', async () => {
+  const password = $('new-password').value;
+  const confirm = $('confirm-password').value;
+
+  if (password.length < 8) return setMsg($('password-msg'), 'Au moins 8 caractères.', 'err');
+  if (password !== confirm) return setMsg($('password-msg'), 'Les deux saisies diffèrent.', 'err');
+
+  setMsg($('password-msg'), 'Enregistrement…');
+  const { error } = await supabase.auth.updateUser({ password });
+
+  if (error) return setMsg($('password-msg'), error.message, 'err');
+
+  $('new-password').value = '';
+  $('confirm-password').value = '';
+  setMsg($('password-msg'), 'Mot de passe enregistré : reconnexion immédiate possible.', 'ok');
+});
+
+// L'adresse est retenue d'une visite à l'autre : un champ de moins à remplir.
+const rememberedEmail = localStorage.getItem('car-radar-email');
+if (rememberedEmail) $('email').value = rememberedEmail;
 
 // ─── Chargement des données ─────────────────────────────────────────────────
 async function loadProfile() {
@@ -472,6 +545,15 @@ supabase.auth.onAuthStateChange(async (_event, newSession) => {
   show($('login-card'), !newSession);
   show($('app-card'), Boolean(newSession));
   show($('tg-card'), Boolean(newSession));
+
+  // Retenir l'adresse pour la prochaine connexion, quel que soit le chemin
+  // emprunté (lien magique ou mot de passe).
+  const email = newSession?.user?.email;
+  if (email) {
+    localStorage.setItem('car-radar-email', email);
+    $('email').value = email;
+  }
+
   if (newSession) await refresh();
 });
 
