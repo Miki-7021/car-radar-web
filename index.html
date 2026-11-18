@@ -138,6 +138,21 @@
     </div>
     <label for="keywords">Motorisation (séparée par des virgules)</label>
     <input id="keywords" placeholder="1.3, 1.33">
+    <label for="market">Pays de recherche</label>
+    <select id="market">
+      <option value="BE" selected>Belgique</option>
+      <option value="DE">Allemagne</option>
+      <option value="FR">France</option>
+      <option value="NL">Pays-Bas</option>
+      <option value="LU">Luxembourg</option>
+      <option value="IT">Italie</option>
+      <option value="ES">Espagne</option>
+      <option value="AT">Autriche</option>
+    </select>
+    <p class="hint">
+      La cote du marché et les annonces sont calculées pour ce pays uniquement :
+      une voiture allemande n'a pas le prix d'une belge.
+    </p>
     <div class="row">
       <div>
         <label for="minYear">Année minimum</label>
@@ -374,6 +389,7 @@ $('add-btn').addEventListener('click', async () => {
     brand,
     model,
     engine_keywords: keywords,
+    market: $('market').value,
     min_year: minYear,
     max_year: maxYear,
     max_price: maxPrice,
@@ -477,7 +493,7 @@ function offerCalculation(brand, model, from, to) {
 
     const maxKm = Number($('maxMileage').value) || undefined;
     const { data, error } = await supabase.functions.invoke(VALUATE_FUNCTION, {
-      body: { brand, model, market: 'BE', yearFrom: from, yearTo: to, maxKm },
+      body: { brand, model, market: $('market').value, yearFrom: from, yearTo: to, maxKm },
     });
 
     if (error || !data || data.value == null) {
@@ -503,6 +519,7 @@ async function lookupCote() {
   const { data, error } = await supabase
     .from('market_values')
     .select('year_from, year_to, value, sample_size, confidence, computed_at')
+    .eq('country', $('market').value)
     .ilike('brand', brand)
     .ilike('model', model)
     .order('computed_at', { ascending: false });
@@ -525,8 +542,9 @@ function scheduleCoteLookup() {
   coteTimer = setTimeout(lookupCote, 450);
 }
 
-for (const id of ['brand', 'model', 'minYear', 'maxYear']) {
+for (const id of ['brand', 'model', 'minYear', 'maxYear', 'market']) {
   $(id).addEventListener('input', scheduleCoteLookup);
+  $(id).addEventListener('change', scheduleCoteLookup);
 }
 
 // ─── Session ────────────────────────────────────────────────────────────────
