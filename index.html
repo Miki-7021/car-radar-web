@@ -354,20 +354,35 @@ const VALUATE_FUNCTION = 'clever-endpoint';
 
 const CONFIDENCE_LABEL = { solide: 'solide', indicative: 'indicative', faible: 'faible' };
 
-/** Affiche une cote et propose de remplir le champ. */
+/** Vrai dès que la personne a saisi sa propre cote : on ne l'écrase plus. */
+let coteTouched = false;
+$('referencePrice').addEventListener('input', () => {
+  coteTouched = true;
+});
+
+/** Affiche une cote et remplit le champ — sans clic à faire. */
 function renderCote(value, sampleSize, confidence) {
+  const label = CONFIDENCE_LABEL[confidence] ?? confidence;
+  const context = `${sampleSize} annonce(s), confiance ${label}`;
+
+  if (!coteTouched) {
+    $('referencePrice').value = String(value);
+    coteHint.innerHTML = `Cote du marché appliquée : <strong>${euro(value)}</strong> (${context}).`;
+    return;
+  }
+
+  // La personne a saisi sa propre valeur : on la laisse, en laissant le choix.
   coteHint.innerHTML =
-    `Marché : <strong>${euro(value)}</strong> sur ${sampleSize} annonce(s) ` +
-    `(confiance ${CONFIDENCE_LABEL[confidence] ?? confidence}). ` +
-    '<a href="#" id="use-cote">Utiliser</a>';
+    `Marché : <strong>${euro(value)}</strong> (${context}). ` +
+    '<a href="#" id="use-cote">Remplacer ma saisie</a>';
 
   const useLink = $('use-cote');
   if (!useLink) return;
 
   useLink.addEventListener('click', (event) => {
     event.preventDefault();
-    $('referencePrice').value = String(value);
-    coteHint.innerHTML = `Cote remplie : <strong>${euro(value)}</strong>.`;
+    coteTouched = false;
+    renderCote(value, sampleSize, confidence);
   });
 }
 
@@ -431,6 +446,9 @@ async function lookupCote() {
 
 function scheduleCoteLookup() {
   clearTimeout(coteTimer);
+  // Changer de modèle ou d'années rend la cote précédente caduque : la nouvelle
+  // valeur peut remplacer celle qui était affichée.
+  coteTouched = false;
   coteTimer = setTimeout(lookupCote, 450);
 }
 
